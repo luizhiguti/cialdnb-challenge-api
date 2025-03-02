@@ -1,14 +1,22 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { readFile, writeFile } from 'fs/promises';
-import * as path from 'path';
+import { ConfigService } from '@nestjs/config';
+import { FileSystemStrategy } from 'src/core/strategies/fs/file-system.strategy';
+import { VercelBlobStrategy } from 'src/core/strategies/fs/vercel-blob.strategy';
+import { FileStoragesEnum } from 'src/domain/enums/file-storages.enum';
+import { FileStorageStrategy } from 'src/domain/fs/file-storage.strategy';
 import { QueryHistory } from 'src/domain/query-history/query-history';
 
 @Injectable()
 export class QueryHistoryService implements OnModuleInit {
-  private file: string;
   private history: QueryHistory[] = [];
-  constructor() {
-    this.file = path.join(process.cwd(), 'data/query-history.txt');
+  private fsStrategies = new Map<FileStoragesEnum, FileStorageStrategy>();
+  constructor(
+    private readonly configService: ConfigService,
+    vercelStrategy: VercelBlobStrategy,
+    fsStrategy: FileSystemStrategy,
+  ) {
+    this.fsStrategies.set(FileStoragesEnum.VERCEL, vercelStrategy);
+    this.fsStrategies.set(FileStoragesEnum.FILE_SYSTEM, fsStrategy);
   }
 
   async onModuleInit() {
@@ -25,15 +33,26 @@ export class QueryHistoryService implements OnModuleInit {
   }
 
   async loadFromFile() {
-    const data = await readFile(this.file, 'utf8');
+    const storage: FileStoragesEnum = this.configService.get(
+      'FILE_STORAGE_STRATEGY',
+      FileStoragesEnum.FILE_SYSTEM,
+    );
+    const strategy = this.fsStrategies.get(storage);
 
-    if (!data) return;
+    if (!strategy) return;
 
-    const parsedData = JSON.parse(data) as QueryHistory[];
-    this.history = parsedData;
+    this.history = await strategy.load();
   }
 
   async saveToFile() {
-    await writeFile(this.file, JSON.stringify(this.history));
+    const storage: FileStoragesEnum = this.configService.get(
+      'FILE_STORAGE_STRATEGY',
+      FileStoragesEnum.FILE_SYSTEM,
+    );
+    const strategy = this.fsStrategies.get(storage);
+
+    if (!strategy) return;
+
+    await strategy.save(JSON.stringify(this.history));
   }
 }
