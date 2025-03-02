@@ -8,7 +8,7 @@ export class QueryHistoryService implements OnModuleInit {
   private file: string;
   private history: QueryHistory[] = [];
   constructor() {
-    this.file = path.join('data/query-history.txt');
+    this.file = path.join(process.cwd(), 'data/query-history.txt');
   }
 
   async onModuleInit() {
